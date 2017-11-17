@@ -1,6 +1,4 @@
 # ortega
-# Emmanuel Malikides
-# November 2017
 Command-line memorisation tool
 ortega is a general-purpose learning tool modelled loosely off Duolingo.
 While currently more of a flash-card app for the terminal, perhaps sometime in
