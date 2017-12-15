@@ -28,8 +28,15 @@ Format for input:
  * Q/a can work also.
 
 Todo:
- - CLTool.
+ - Make the frequency of questions proportional to the score.
+ - Make the score 
+ - Grade override feature.
+ - Make it a CLTool.
  - Pandas data structures.
+ - other data structures
+    - ** ability to revise by date (what did I learn today?)
+    - ** ability to revise by topic (How well do I know this topic?)
+    - ** ability to re-index.
  - print bug when there is no definition.
 
  - Add parser for json object/direct python code objects. Probably nicer
@@ -46,7 +53,6 @@ Todo:
  predominantly I take notes on videos
   - who, when, what are they saying.
  - Would be good to store URls somehow. Perhaps add a reference section for notes?
- 
 
 Format of csv inputs:
 
@@ -70,7 +76,6 @@ csv\  csv.open()# DictReader# DictWriter# writerow
 iterator object\ __iter__()# - implicitly called in loops# next()# - returns next thing# StopIteration()
 
 
-
 """
 from PIL import Image
 import shelve
@@ -78,7 +83,7 @@ import time
 import csv
 import sys
 import random
-import itertools
+from itertools import cycle
 import matplotlib.pyplot as plt
 from collections import defaultdict as dd
 # import python_concept
@@ -102,6 +107,7 @@ from collections import defaultdict as dd
 
 DATAPATH = ""
 SPECIAL = {"_sources","_image","_session_scores"}
+NOT_QUESTIONS = {"_sources","_session_scores"}
 
 def fuzzy_match(str1, str2):
     s1 = set(str1)
@@ -144,16 +150,56 @@ def score(answer, keyword_dic):
     keyword_dic["grades"].append((time.time(),s))
 
 def test(topic_db):
+    """
+    # calculate the delay.
+    # calculate the "score/probability of recall" for the question/fact.
+    # rank the questions -> min L2 distance from (tol, 0) in space ( score, deltat ), 
+    # where score<tol
+    -> means we select questions which are high score but further back with equal 
+    probability to questions which are very recent, but have crappy scores.
+
+    Include time separately because we don't just want scores
+    We want to move continuously from the recent and known to the distant and unknown.
+
+    # After the question is asked, the score for the question is recalculated and the 
+    question is re-inserted into the list.
+
+    Why is time included twice?
+    closer means more "recently practiced"
+    Higher returns from practicing more recent things. 
+
+    Now we don't visualise the session scores as a naive percentage, 
+    we visualise each question as a point on a 2D plane:
+     Dt versus score.
+    """
+    # For each question we store the grade and the time.
+    # We then parse this information (ideally once), to calculate the memory strength (stuckness)
+    
+    # calculate the stuckness and delay for each question from the grades, and add them to the heap.
+
+    # Rank the questions.
+
+    # Select question.
+
+    # test quesiont.
+
+    # Re-calculate the stuckness and delay for the question, add it again
+
+    # Use a heap -> maximally efficient implementation of a priority Queue.
+
     if topic_db:
         stop = False
         print("\n"*50)  
-        questions = [key for key in list(topic_db.keys()) if key not in SPECIAL]
+        questions = [key for key in list(topic_db.keys()) if key not in NOT_QUESTIONS]
+        N_questions = len(questions)
+        random.shuffle(questions)
+        question_cycle = cycle(questions)
         # dictionary of best answer so far of each question
         session_score = {}
         while not stop:
             # print(":s to stop")
             # keys are modules here.
-            key = random.choice(questions)
+            key = next(question_cycle)
             x = input(key+"??")
             stop = x == ":s"
             if "_image" in key:
@@ -162,11 +208,13 @@ def test(topic_db):
                 img = Image.open(file) 
                 img.show()
                 x = input("Enter score: ")
-                x = str(max(1.0,abs(float(x))))
-                topic_db[key]["grades"].append((time.time(), x))
-                session_score[key] = x
-            elif "_sources" == key or "_session_scores" == key:
-                pass
+                try :
+                    x = str(max(1.0,abs(float(x))))
+                except :
+                    print('Something went wrong.')
+                else :
+                    topic_db[key]["grades"].append((time.time(), x))
+                    session_score[key] = x
             elif ":s"!= x:
                 score(x,topic_db[key])
                 print("You scored:", topic_db[key]["grades"][-1][1])
@@ -185,7 +233,7 @@ def test(topic_db):
             input()
             print("\n"*50)
         print("Session over. Score: ")
-        net_avg_score = sum(session_score.values())/len(questions)
+        net_avg_score = sum(session_score.values())/N_questions
         print(net_avg_score)
         topic_db["_session_scores"].append((time.time(), net_avg_score))
         print("Summary:")
@@ -212,7 +260,7 @@ def revise(topic_db):
             print(primary)
             img = Image.open(info["associations"].strip())
             img.show()
-        elif "_sources" == primary or "_session_scores" == primary:
+        elif "_sources" in primary or "_session_scores" in primary:
             pass
         else :
             print("\n"*50)
@@ -234,7 +282,7 @@ def parse_associations(associations_str):
     associations = dd(list)
     note_lst = []
     assble = ''
-    info = associations_str.strip('[]').split('#')
+    info = associations_str.split('#')
     for i in range(len(info)):
         part = info[i]
 
@@ -246,8 +294,6 @@ def parse_associations(associations_str):
             # or we are at the very beginning
             if assble : 
                 associations[assble]=note_lst
-                if not note_lst:
-                    print("Error? No associations for:",assble)
                 note_lst = []
                 assble = part.strip()
             else:
